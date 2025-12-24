@@ -17,6 +17,8 @@ import uuid
 from typing import Any
 
 from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 # Create the MCP server with HTTP transport
 mcp = FastMCP(
@@ -200,6 +202,24 @@ def replace_boxes_in_pdf(
         "pages_modified": pages_modified,
         "output_path": output_path
     }
+
+
+# ============== Health Check Routes ==============
+
+@mcp.custom_route("/", methods=["GET"])
+async def root(request: Request) -> JSONResponse:
+    """Root endpoint for health checks."""
+    return JSONResponse({
+        "service": "unredactor-mcp",
+        "status": "healthy",
+        "mcp_endpoint": "/mcp"
+    })
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> JSONResponse:
+    """Health check endpoint for Railway."""
+    return JSONResponse({"status": "healthy"})
 
 
 # ============== MCP Tools ==============
@@ -489,7 +509,9 @@ def cleanup_file(file_id: str) -> dict:
 
 def main():
     """Entry point for the MCP server."""
-    mcp.run(transport="http", host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+    port = int(os.environ.get("PORT", 8080))
+    print(f"Starting Unredactor MCP server on port {port}...")
+    mcp.run(transport="http", host="0.0.0.0", port=port)
 
 
 # Run the server
