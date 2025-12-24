@@ -491,6 +491,17 @@ def cleanup_file(file_id: str) -> dict:
 # Default path is /mcp
 app = mcp.http_app()
 
+# Add health check endpoint for Railway
+from starlette.responses import JSONResponse
+from starlette.routing import Route
+
+async def health_check(request):
+    """Simple health check endpoint for Railway."""
+    return JSONResponse({"status": "healthy", "service": "unredactor-mcp"})
+
+# Add the health check route
+app.routes.append(Route("/health", health_check))
+
 
 def main():
     """Entry point for the MCP server."""

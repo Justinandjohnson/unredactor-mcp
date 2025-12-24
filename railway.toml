@@ -2,7 +2,7 @@
 builder = "dockerfile"
 
 [deploy]
-healthcheckPath = "/mcp"
+healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
