@@ -94,6 +94,128 @@ def find_boxes_in_pdf(pdf_path: str, page_num: int = 0) -> list[dict]:
     return boxes
 
 
+def is_pdf_text_based(pdf_path: str, sample_pages: int = 3) -> dict:
+    """
+    Determine if a PDF contains actual text or is image-based (scanned).
+
+    Args:
+        pdf_path: Path to the PDF file
+        sample_pages: Number of pages to check (default: 3)
+
+    Returns:
+        Dictionary with analysis results
+    """
+    doc = fitz.open(pdf_path)
+    total_pages = len(doc)
+    pages_to_check = min(sample_pages, total_pages)
+
+    results = {
+        "is_text_based": False,
+        "total_pages": total_pages,
+        "pages_checked": pages_to_check,
+        "pages_with_text": 0,
+        "pages_with_images": 0,
+        "average_text_length": 0,
+        "page_details": []
+    }
+
+    total_text_length = 0
+
+    for page_num in range(pages_to_check):
+        page = doc[page_num]
+
+        # Extract text from the page
+        text = page.get_text("text").strip()
+        text_length = len(text)
+
+        # Count images on the page
+        image_list = page.get_images()
+        image_count = len(image_list)
+
+        # Determine if page has meaningful text (more than just headers/footers)
+        has_text = text_length > 100  # Threshold for "meaningful" text
+        has_images = image_count > 0
+
+        page_info = {
+            "page": page_num,
+            "text_length": text_length,
+            "image_count": image_count,
+            "has_meaningful_text": has_text,
+            "has_images": has_images
+        }
+
+        results["page_details"].append(page_info)
+        total_text_length += text_length
+
+        if has_text:
+            results["pages_with_text"] += 1
+        if has_images:
+            results["pages_with_images"] += 1
+
+    results["average_text_length"] = total_text_length / pages_to_check if pages_to_check > 0 else 0
+
+    # Determine if PDF is text-based
+    # If majority of sampled pages have meaningful text, consider it text-based
+    results["is_text_based"] = results["pages_with_text"] > (pages_to_check / 2)
+
+    # Add recommendation
+    if results["is_text_based"]:
+        results["recommendation"] = "PDF contains text - direct text extraction will work"
+    else:
+        results["recommendation"] = "PDF appears to be image-based - OCR may be required for text extraction"
+
+    doc.close()
+    return results
+
+
+def extract_text_from_region(page, x0, y0, x1, y1, use_ocr=True):
+    """
+    Extract text from a specific region of a PDF page.
+
+    First tries to extract text from the PDF text layer.
+    If no text found and use_ocr=True, uses Tesseract OCR on the region.
+
+    Args:
+        page: PyMuPDF page object
+        x0, y0, x1, y1: Coordinates of the region
+        use_ocr: Whether to use OCR as fallback (default: True)
+
+    Returns:
+        Extracted text or "[No text found]"
+    """
+    import pytesseract
+
+    # First try: Extract text from PDF text layer
+    rect = fitz.Rect(x0, y0, x1, y1)
+    text = page.get_text("text", clip=rect).strip()
+
+    # If we found meaningful text, return it
+    if text and len(text) > 2:  # At least 3 characters
+        return text
+
+    # Second try: Use OCR if enabled and no text found
+    if use_ocr:
+        try:
+            # Render the region at high resolution for better OCR
+            mat = fitz.Matrix(3, 3)  # 3x scale for OCR accuracy
+            pix = page.get_pixmap(matrix=mat, clip=rect)
+
+            # Convert to PIL Image
+            img_data = pix.tobytes("png")
+            img = Image.open(io.BytesIO(img_data))
+
+            # Run OCR
+            ocr_text = pytesseract.image_to_string(img, config='--psm 6').strip()
+
+            if ocr_text:
+                return f"{ocr_text} [OCR]"  # Mark as OCR-extracted
+
+        except Exception as e:
+            print(f"OCR failed: {e}")
+
+    return "[No text found]"
+
+
 def replace_boxes_in_pdf(
     pdf_path: str,
     output_path: str,
@@ -107,6 +229,7 @@ def replace_boxes_in_pdf(
     doc = fitz.open(pdf_path)
     total_replaced = 0
     pages_modified = []
+    discovered_text = []  # Track text found under redaction boxes
 
     # Determine which pages to process
     if page_num is not None:
@@ -144,6 +267,15 @@ def replace_boxes_in_pdf(
 
         count = 0
         for box in matching_boxes:
+            # FIRST: Extract text from under the redaction box (before covering it)
+            hidden_text = extract_text_from_region(page, box["x0"], box["y0"], box["x1"], box["y1"])
+            discovered_text.append({
+                "page": pnum,
+                "box": f"({box['x0']:.1f}, {box['y0']:.1f}, {box['x1']:.1f}, {box['y1']:.1f})",
+                "text": hidden_text,
+                "size": f"{box['width']:.1f}x{box['height']:.1f}"
+            })
+
             # Scale coordinates by 2 (since we rendered at 2x)
             x0 = box["x0"] * 2
             y0 = box["y0"] * 2
@@ -198,7 +330,9 @@ def replace_boxes_in_pdf(
     return {
         "total_boxes_replaced": total_replaced,
         "pages_modified": pages_modified,
-        "output_path": output_path
+        "output_path": output_path,
+        "discovered_text": discovered_text,
+        "unredacted_count": len([d for d in discovered_text if d["text"] != "[No text found]"])
     }
 
 
@@ -290,6 +424,27 @@ def get_pdf_info(file_id: str) -> dict:
 
 
 @mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False})
+def analyze_pdf_type(file_id: str, sample_pages: int = 3) -> dict:
+    """
+    Analyze whether a PDF contains actual text or is image-based (scanned).
+
+    This is useful to determine if text extraction will work or if OCR is needed.
+
+    Args:
+        file_id: The file ID returned from upload_pdf
+        sample_pages: Number of pages to analyze (default: 3)
+
+    Returns:
+        Dictionary with analysis results including whether PDF is text-based
+    """
+    if file_id not in uploaded_files:
+        raise ValueError(f"File ID '{file_id}' not found. Please upload a PDF first.")
+
+    pdf_path = uploaded_files[file_id]
+    return is_pdf_text_based(pdf_path, sample_pages)
+
+
+@mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False})
 def detect_black_boxes(file_id: str, page_number: int = 0) -> dict:
     """
     Detect black boxes (redactions) on a PDF page.
@@ -309,6 +464,9 @@ def detect_black_boxes(file_id: str, page_number: int = 0) -> dict:
 
     pdf_path = uploaded_files[file_id]
     boxes = find_boxes_in_pdf(pdf_path, page_number)
+
+    # Analyze if PDF is text-based or image-based
+    pdf_analysis = is_pdf_text_based(pdf_path, sample_pages=1)
 
     # Group boxes by size for easier selection
     size_groups = {}
@@ -335,10 +493,16 @@ def detect_black_boxes(file_id: str, page_number: int = 0) -> dict:
         "total_boxes_found": len(boxes),
         "boxes_by_size": list(size_groups.values()),
         "boxes": boxes,
+        "pdf_type": {
+            "is_text_based": pdf_analysis["is_text_based"],
+            "recommendation": pdf_analysis["recommendation"],
+            "average_text_length": pdf_analysis["average_text_length"]
+        },
         "_meta": {
             "widgetAccessible": True,
             "phase": "detection",
-            "all_boxes": boxes
+            "all_boxes": boxes,
+            "pdf_analysis": pdf_analysis
         }
     }
 
@@ -442,12 +606,15 @@ def replace_redaction_boxes(
         "total_boxes_replaced": result["total_boxes_replaced"],
         "replaced_count": result["total_boxes_replaced"],
         "pages_modified": result["pages_modified"],
-        "message": f"Replaced {result['total_boxes_replaced']} boxes. Use download_pdf with file_id '{output_id}' to get the modified PDF.",
+        "discovered_text": result.get("discovered_text", []),
+        "unredacted_count": result.get("unredacted_count", 0),
+        "message": f"Replaced {result['total_boxes_replaced']} boxes. Found text under {result.get('unredacted_count', 0)} of them. Use download_pdf with file_id '{output_id}' to get the modified PDF.",
         "_meta": {
             "widgetAccessible": True,
             "phase": "replaced",
             "originalFileId": file_id,
-            "modifiedFileId": output_id
+            "modifiedFileId": output_id,
+            "discoveredText": result.get("discovered_text", [])
         }
     }
 
@@ -514,10 +681,11 @@ def cleanup_file(file_id: str) -> dict:
 
 
 # Add required ChatGPT App endpoints
-from starlette.responses import JSONResponse, PlainTextResponse, HTMLResponse, FileResponse
+from starlette.responses import JSONResponse, PlainTextResponse, HTMLResponse, FileResponse, RedirectResponse
 from starlette.routing import Route, Mount
 from starlette.staticfiles import StaticFiles
 from starlette.applications import Starlette
+from starlette.middleware.cors import CORSMiddleware
 import os
 
 async def health_check(request):
@@ -661,21 +829,129 @@ async def serve_widget_js(request):
         return FileResponse(widget_path, media_type="application/javascript")
     return PlainTextResponse("// Widget JS not found", status_code=404)
 
-# Create the base MCP app
+async def serve_widget_css(request):
+    """Serve the widget CSS file."""
+    widget_path = os.path.join(os.path.dirname(__file__), "static/widget.css")
+    if os.path.exists(widget_path):
+        return FileResponse(widget_path, media_type="text/css")
+    return PlainTextResponse("/* Widget CSS not found */", status_code=404)
+
+async def serve_root(request):
+    """Redirect root to widget."""
+    return RedirectResponse(url="/widget.html")
+
+async def serve_demo_pdf(request):
+    """Serve the demo PDF file."""
+    demo_pdf_path = os.path.join(os.path.dirname(__file__), "../epstein-documents/TEST_REDACTED.pdf")
+    if os.path.exists(demo_pdf_path):
+        return FileResponse(demo_pdf_path, media_type="application/pdf", filename="demo.pdf")
+    return JSONResponse({'error': 'Demo PDF not found'}, status_code=404)
+
+async def call_tool_http(request):
+    """HTTP endpoint for standalone widget testing - wraps MCP tool calls."""
+    try:
+        body = await request.json()
+        tool_name = body.get('tool')
+        args = body.get('args', {})
+
+        # Call the appropriate tool function
+        if tool_name == 'detect_black_boxes':
+            # Decode base64 PDF data and save to temp file
+            import base64
+            import tempfile
+            pdf_data = base64.b64decode(args.get('pdf_data'))
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+                tmp.write(pdf_data)
+                tmp_path = tmp.name
+
+            try:
+                boxes = find_boxes_in_pdf(tmp_path, args.get('page_number', 0))
+                result = {'boxes': boxes, 'page_number': args.get('page_number', 0)}
+            finally:
+                os.unlink(tmp_path)
+
+        elif tool_name == 'replace_redaction_boxes':
+            # Decode base64 PDF data and save to temp file
+            import base64
+            import tempfile
+            pdf_data = base64.b64decode(args.get('pdf_data'))
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+                tmp.write(pdf_data)
+                tmp_path = tmp.name
+
+            output_tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+            output_path = output_tmp.name
+            output_tmp.close()
+
+            try:
+                replacement_result = replace_boxes_in_pdf(
+                    pdf_path=tmp_path,
+                    output_path=output_path,
+                    target_width=args.get('box_width'),
+                    target_height=args.get('box_height'),
+                    replacement_text=args.get('replacement_text'),
+                    page_num=args.get('page_number', 0),
+                    tolerance=args.get('size_tolerance', 2.0)
+                )
+
+                # Read output file and encode as base64
+                with open(output_path, 'rb') as f:
+                    output_data = base64.b64encode(f.read()).decode()
+
+                # Also return the original PDF for side-by-side comparison
+                result = {
+                    'processed_pdf': output_data,
+                    'original_pdf': args.get('pdf_data'),  # Pass through the original
+                    'total_boxes_replaced': replacement_result.get('total_boxes_replaced', 0),
+                    'discovered_text': replacement_result.get('discovered_text', []),
+                    'pages_modified': replacement_result.get('pages_modified', []),
+                    'unredacted_count': replacement_result.get('unredacted_count', 0)
+                }
+            finally:
+                os.unlink(tmp_path)
+                if os.path.exists(output_path):
+                    os.unlink(output_path)
+        else:
+            return JSONResponse({'error': f'Unknown tool: {tool_name}'}, status_code=400)
+
+        return JSONResponse(result)
+    except Exception as e:
+        print(f"Tool call error: {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+# Create the base MCP app (it has /mcp route internally)
 mcp_app = mcp.http_app()
 
 # Create a wrapper Starlette app with all routes
+# Note: FastMCP's http_app already has a /mcp route, so we mount at root
+# This way the internal /mcp route becomes accessible at /mcp (not /mcp/mcp)
 routes = [
+    Route("/", serve_root),
     Route("/health", health_check),
+    Route("/api/call-tool", call_tool_http, methods=["POST"]),  # Standalone widget endpoint
+    Route("/api/demo-pdf", serve_demo_pdf),  # Demo PDF endpoint
     Route("/.well-known/openai-apps-challenge", well_known_challenge),
     Route("/privacy", privacy_policy),
     Route("/terms", terms_of_service),
     Route("/widget.html", serve_widget_html),
     Route("/widget.js", serve_widget_js),
-    Mount("/mcp", app=mcp_app),  # Mount MCP at /mcp
+    Route("/widget.css", serve_widget_css),
 ]
 
-app = Starlette(routes=routes)
+# Create main app with MCP's lifespan and mount MCP app at root so /mcp is accessible
+app = Starlette(routes=routes, lifespan=mcp_app.lifespan)
+app.mount("/", mcp_app)
+
+# Add CORS middleware for local testing with MCP Inspector
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for local development
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def main():
