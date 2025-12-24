@@ -19,16 +19,18 @@ COPY requirements-mcp.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements-mcp.txt
 
-# Copy application code
-COPY unredactor_mcp/ ./unredactor_mcp/
-
-# Set environment variables
-# Railway typically uses PORT, default to 8080 if not set
+# Set environment variables BEFORE copying code
 ENV PORT=8080
 ENV PYTHONUNBUFFERED=1
 
-# Expose port for documentation (Railway uses PORT env var)
+# Copy application code (v2 - force rebuild)
+COPY unredactor_mcp/ ./unredactor_mcp/
+
+# Test that import works during build
+RUN python -c "from unredactor_mcp.server import app; print('Build test: app imported successfully')"
+
+# Expose port
 EXPOSE 8080
 
-# Run directly with Python - more reliable than bash script
-CMD ["python", "-m", "unredactor_mcp.server"]
+# Run the server - use shell form to expand $PORT
+CMD python -c "import os; print('Starting...'); port=int(os.environ.get('PORT',8080)); print(f'Port: {port}'); from unredactor_mcp.server import app; import uvicorn; uvicorn.run(app, host='0.0.0.0', port=port)"
