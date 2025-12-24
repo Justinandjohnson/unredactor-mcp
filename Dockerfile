@@ -30,5 +30,9 @@ ENV PYTHONUNBUFFERED=1
 # Expose port for documentation (Railway uses PORT env var)
 EXPOSE 8080
 
-# Run the server using uvicorn directly
-CMD ["sh", "-c", "echo Starting on port ${PORT} && uvicorn unredactor_mcp.server:app --host 0.0.0.0 --port ${PORT}"]
+# Copy and setup startup script
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
+# Run the startup script
+CMD ["/app/start.sh"]
