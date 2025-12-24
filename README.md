@@ -17,7 +17,7 @@ KNOWN ISSUE:
 - This converts to PNG then back to PDF, causing the document to expand exponentially each time you change a box.  
 - Consequent to that, the font size remains the same so your box text gets smaller and smaller.
 
-The executable form was compiled with Nuitka in standalone mode.
+The executable form was compiled with Nuitka, you may need to install [Python](https://www.python.org/) if you do not have it.
 
 <img width="976" height="808" alt="image" src="https://github.com/user-attachments/assets/b7628f39-7115-4b4f-bd9c-f2977650501e" />
 <img width="1382" height="804" alt="image" src="https://github.com/user-attachments/assets/5bd69540-6d14-4916-a9fc-fbbbebe08891" />
