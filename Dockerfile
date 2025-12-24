@@ -30,9 +30,5 @@ ENV PYTHONUNBUFFERED=1
 # Expose port for documentation (Railway uses PORT env var)
 EXPOSE 8080
 
-# Copy and setup startup script
-COPY start.sh /app/start.sh
-RUN chmod +x /app/start.sh
-
-# Run the startup script
-CMD ["/app/start.sh"]
+# Run directly with Python - more reliable than bash script
+CMD ["python", "-m", "unredactor_mcp.server"]

@@ -495,9 +495,19 @@ app = mcp.http_app()
 def main():
     """Entry point for the MCP server."""
     import uvicorn
+    import sys
+
+    print("=" * 50, flush=True)
+    print("Unredactor MCP Server Starting", flush=True)
+    print(f"Python version: {sys.version}", flush=True)
+    print(f"PORT env var: {os.environ.get('PORT', 'NOT SET')}", flush=True)
+
     port = int(os.environ.get("PORT", 8080))
-    print(f"Starting Unredactor MCP server on port {port}...")
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    print(f"Using port: {port}", flush=True)
+    print(f"App: {app}", flush=True)
+    print("=" * 50, flush=True)
+
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
 
 
 # Run the server
