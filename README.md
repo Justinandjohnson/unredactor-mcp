@@ -52,7 +52,21 @@ docker pull justinandjohnson/unredactor-mcp
 }
 ```
 
-### Option 3: From Source
+### Option 3: HTTP (Remote)
+
+Use the publicly hosted version via HTTP transport:
+
+```json
+{
+  "mcpServers": {
+    "unredactor": {
+      "url": "https://unredactor-mcp-production.up.railway.app/mcp"
+    }
+  }
+}
+```
+
+### Option 4: From Source
 
 ```bash
 git clone https://github.com/Justinandjohnson/unredactor-mcp
