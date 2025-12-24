@@ -1,0 +1,20 @@
+{
+  "name": "unredactor-chatgpt-app",
+  "version": "1.0.0",
+  "description": "ChatGPT widget for Unredactor - PDF redaction detection and replacement",
+  "scripts": {
+    "build": "esbuild src/index.tsx --bundle --format=iife --outfile=public/widget.js --minify --target=es2020",
+    "build:dev": "esbuild src/index.tsx --bundle --format=iife --outfile=public/widget.js --sourcemap --target=es2020",
+    "watch": "esbuild src/index.tsx --bundle --format=iife --outfile=public/widget.js --watch --target=es2020"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "esbuild": "^0.19.0",
+    "typescript": "^5.0.0"
+  }
+}

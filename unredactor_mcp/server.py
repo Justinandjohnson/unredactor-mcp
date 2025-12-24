@@ -204,7 +204,7 @@ def replace_boxes_in_pdf(
 
 # ============== MCP Tools ==============
 
-@mcp.tool()
+@mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False})
 def upload_pdf(pdf_base64: str, filename: str = "document.pdf") -> dict:
     """
     Upload a PDF file for processing.
@@ -246,11 +246,15 @@ def upload_pdf(pdf_base64: str, filename: str = "document.pdf") -> dict:
         "file_id": file_id,
         "filename": filename,
         "page_count": page_count,
-        "message": f"PDF uploaded successfully. Use file_id '{file_id}' for subsequent operations."
+        "message": f"PDF uploaded successfully. Use file_id '{file_id}' for subsequent operations.",
+        "_meta": {
+            "widgetAccessible": True,
+            "phase": "uploaded"
+        }
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False})
 def get_pdf_info(file_id: str) -> dict:
     """
     Get information about an uploaded PDF file.
@@ -285,7 +289,7 @@ def get_pdf_info(file_id: str) -> dict:
     return info
 
 
-@mcp.tool()
+@mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False})
 def detect_black_boxes(file_id: str, page_number: int = 0) -> dict:
     """
     Detect black boxes (redactions) on a PDF page.
@@ -330,11 +334,16 @@ def detect_black_boxes(file_id: str, page_number: int = 0) -> dict:
         "page_number": page_number,
         "total_boxes_found": len(boxes),
         "boxes_by_size": list(size_groups.values()),
-        "all_boxes": boxes
+        "boxes": boxes,
+        "_meta": {
+            "widgetAccessible": True,
+            "phase": "detection",
+            "all_boxes": boxes
+        }
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False})
 def detect_all_pages(file_id: str) -> dict:
     """
     Detect black boxes on all pages of a PDF.
@@ -370,10 +379,15 @@ def detect_all_pages(file_id: str) -> dict:
         })
 
     results["total_boxes"] = total_boxes
+    results["_meta"] = {
+        "widgetAccessible": True,
+        "phase": "detection_all",
+        "pages": results["pages"]
+    }
     return results
 
 
-@mcp.tool()
+@mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "openWorldHint": True})
 def replace_redaction_boxes(
     file_id: str,
     box_width: float,
@@ -424,13 +438,21 @@ def replace_redaction_boxes(
     return {
         "original_file_id": file_id,
         "modified_file_id": output_id,
+        "processed_file_id": output_id,
         "total_boxes_replaced": result["total_boxes_replaced"],
+        "replaced_count": result["total_boxes_replaced"],
         "pages_modified": result["pages_modified"],
-        "message": f"Replaced {result['total_boxes_replaced']} boxes. Use download_pdf with file_id '{output_id}' to get the modified PDF."
+        "message": f"Replaced {result['total_boxes_replaced']} boxes. Use download_pdf with file_id '{output_id}' to get the modified PDF.",
+        "_meta": {
+            "widgetAccessible": True,
+            "phase": "replaced",
+            "originalFileId": file_id,
+            "modifiedFileId": output_id
+        }
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False})
 def download_pdf(file_id: str) -> dict:
     """
     Download a PDF file as base64-encoded content.
@@ -454,11 +476,15 @@ def download_pdf(file_id: str) -> dict:
     return {
         "file_id": file_id,
         "pdf_base64": base64.b64encode(pdf_bytes).decode('utf-8'),
-        "size_bytes": len(pdf_bytes)
+        "size_bytes": len(pdf_bytes),
+        "_meta": {
+            "pdf_base64": base64.b64encode(pdf_bytes).decode('utf-8'),
+            "widgetAccessible": True
+        }
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": True, "openWorldHint": False})
 def cleanup_file(file_id: str) -> dict:
     """
     Delete an uploaded file to free up space.
@@ -491,16 +517,161 @@ def cleanup_file(file_id: str) -> dict:
 # Default path is /mcp
 app = mcp.http_app()
 
-# Add health check endpoint for Railway
-from starlette.responses import JSONResponse
+# Add required ChatGPT App endpoints
+from starlette.responses import JSONResponse, PlainTextResponse, HTMLResponse, FileResponse
 from starlette.routing import Route
+import os
 
 async def health_check(request):
     """Simple health check endpoint for Railway."""
     return JSONResponse({"status": "healthy", "service": "unredactor-mcp"})
 
-# Add the health check route
-app.routes.append(Route("/health", health_check))
+async def well_known_challenge(request):
+    """OpenAI Apps Challenge endpoint for domain verification."""
+    # TODO: Replace with actual challenge token from OpenAI Platform
+    return PlainTextResponse("CHALLENGE_TOKEN_PLACEHOLDER")
+
+async def privacy_policy(request):
+    """Privacy policy page."""
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - Unredactor</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
+        h1 { color: #1a1a1a; }
+        h2 { color: #333; margin-top: 30px; }
+        p { margin-bottom: 15px; }
+        .contact { background: #f5f5f5; padding: 15px; border-radius: 8px; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <h1>Privacy Policy</h1>
+    <p><strong>Effective Date:</strong> December 2024</p>
+
+    <h2>Information We Collect</h2>
+    <p>Unredactor processes PDF files temporarily to detect and replace redaction boxes. We collect:</p>
+    <ul>
+        <li>Uploaded PDF files (stored temporarily)</li>
+        <li>Basic usage metrics (request counts, error rates)</li>
+    </ul>
+
+    <h2>How We Use Information</h2>
+    <p>We use collected information solely to:</p>
+    <ul>
+        <li>Process your PDF files for redaction detection</li>
+        <li>Improve service reliability and performance</li>
+        <li>Debug technical issues</li>
+    </ul>
+
+    <h2>Data Storage and Retention</h2>
+    <p>Uploaded PDF files are stored temporarily in memory during processing and are automatically deleted after the session ends. We do not permanently store user files.</p>
+
+    <h2>Third-Party Services</h2>
+    <p>We use Railway for hosting infrastructure. No user data is shared with third parties for marketing or advertising purposes.</p>
+
+    <h2>Data Sharing</h2>
+    <p>We do not sell, trade, or share your data with third parties, except as required by law.</p>
+
+    <h2>User Rights</h2>
+    <p>You have the right to:</p>
+    <ul>
+        <li>Request deletion of your data</li>
+        <li>Access information we have collected</li>
+        <li>Opt out of data collection (by not using the service)</li>
+    </ul>
+
+    <div class="contact">
+        <h2>Contact Information</h2>
+        <p>For privacy concerns or questions, please contact us at: privacy@unredactor.com</p>
+    </div>
+</body>
+</html>"""
+    return HTMLResponse(html)
+
+async def terms_of_service(request):
+    """Terms of service page."""
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms of Service - Unredactor</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
+        h1 { color: #1a1a1a; }
+        h2 { color: #333; margin-top: 30px; }
+        p { margin-bottom: 15px; }
+        .contact { background: #f5f5f5; padding: 15px; border-radius: 8px; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <h1>Terms of Service</h1>
+    <p><strong>Effective Date:</strong> December 2024</p>
+
+    <h2>Service Description</h2>
+    <p>Unredactor is a tool that detects and replaces black redaction boxes in PDF documents. The service is provided "as is" without warranties.</p>
+
+    <h2>Acceptable Use Policy</h2>
+    <p>You agree to use Unredactor only for lawful purposes. Prohibited activities include:</p>
+    <ul>
+        <li>Processing documents you don't have legal rights to modify</li>
+        <li>Attempting to circumvent security measures</li>
+        <li>Uploading malicious files or malware</li>
+        <li>Excessive automated usage that impacts service availability</li>
+    </ul>
+
+    <h2>Data and Privacy</h2>
+    <p>Your use of the service is governed by our <a href="/privacy">Privacy Policy</a>. By using Unredactor, you agree to our data practices.</p>
+
+    <h2>Intellectual Property</h2>
+    <p>You retain all rights to your uploaded PDF files. We do not claim ownership of user content.</p>
+
+    <h2>Disclaimers and Limitation of Liability</h2>
+    <p>Unredactor is provided "as is" without warranties. We are not liable for any damages arising from use of the service, including but not limited to data loss or incorrect redaction detection.</p>
+
+    <h2>Rate Limits and Usage Restrictions</h2>
+    <p>We may implement rate limiting to ensure fair usage. Excessive usage may result in temporary service restrictions.</p>
+
+    <h2>Modifications and Termination</h2>
+    <p>We reserve the right to modify or terminate the service at any time. We will provide notice of material changes when possible.</p>
+
+    <h2>Governing Law</h2>
+    <p>These terms are governed by the laws of the jurisdiction where the service is operated.</p>
+
+    <div class="contact">
+        <h2>Contact Information</h2>
+        <p>For questions about these terms, contact us at: support@unredactor.com</p>
+    </div>
+</body>
+</html>"""
+    return HTMLResponse(html)
+
+async def serve_widget_html(request):
+    """Serve the widget HTML file."""
+    widget_path = os.path.join(os.path.dirname(__file__), "static/widget.html")
+    if os.path.exists(widget_path):
+        return FileResponse(widget_path, media_type="text/html")
+    return HTMLResponse("<html><body><h1>Widget not found</h1></body></html>", status_code=404)
+
+async def serve_widget_js(request):
+    """Serve the widget JavaScript bundle."""
+    widget_path = os.path.join(os.path.dirname(__file__), "static/widget.js")
+    if os.path.exists(widget_path):
+        return FileResponse(widget_path, media_type="application/javascript")
+    return PlainTextResponse("// Widget JS not found", status_code=404)
+
+# Add the routes
+app.routes.extend([
+    Route("/health", health_check),
+    Route("/.well-known/openai-apps-challenge", well_known_challenge),
+    Route("/privacy", privacy_policy),
+    Route("/terms", terms_of_service),
+    Route("/widget.html", serve_widget_html),
+    Route("/widget.js", serve_widget_js),
+])
 
 
 def main():
