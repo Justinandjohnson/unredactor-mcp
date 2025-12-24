@@ -513,13 +513,11 @@ def cleanup_file(file_id: str) -> dict:
     }
 
 
-# Create ASGI app for production deployment
-# Default path is /mcp
-app = mcp.http_app()
-
 # Add required ChatGPT App endpoints
 from starlette.responses import JSONResponse, PlainTextResponse, HTMLResponse, FileResponse
-from starlette.routing import Route
+from starlette.routing import Route, Mount
+from starlette.staticfiles import StaticFiles
+from starlette.applications import Starlette
 import os
 
 async def health_check(request):
@@ -663,15 +661,21 @@ async def serve_widget_js(request):
         return FileResponse(widget_path, media_type="application/javascript")
     return PlainTextResponse("// Widget JS not found", status_code=404)
 
-# Add the routes
-app.routes.extend([
+# Create the base MCP app
+mcp_app = mcp.http_app()
+
+# Create a wrapper Starlette app with all routes
+routes = [
     Route("/health", health_check),
     Route("/.well-known/openai-apps-challenge", well_known_challenge),
     Route("/privacy", privacy_policy),
     Route("/terms", terms_of_service),
     Route("/widget.html", serve_widget_html),
     Route("/widget.js", serve_widget_js),
-])
+    Mount("/mcp", app=mcp_app),  # Mount MCP at /mcp
+]
+
+app = Starlette(routes=routes)
 
 
 def main():
