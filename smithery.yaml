@@ -1,0 +1,15 @@
+# Smithery configuration for unredactor-mcp
+# https://smithery.ai/docs/config/smithery-yaml
+
+runtime: "container"
+
+startCommand:
+  type: "http"
+  configSchema:
+    type: "object"
+    properties: {}
+    required: []
+
+build:
+  dockerfile: "Dockerfile"
+  dockerBuildPath: "."

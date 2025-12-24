@@ -1,23 +1,123 @@
-# Un-Redactor
-A PDF editing tool that lets you put your own information over a redaction box.
+# Unredactor MCP
 
-This tool is for forensics purposes. It does not "recover" data truly destroyed by redaction tools.
+[![PyPI version](https://badge.fury.io/py/unredactor-mcp.svg)](https://badge.fury.io/py/unredactor-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-What it **does** do is allow you to **write over** a redaction box. Like white-out.
+A Model Context Protocol (MCP) server that lets AI assistants detect and replace black redaction boxes in PDF documents.
 
-You can select a redaction box, and select all of the exact dimensions and replace at once.
+## What it does
 
-I am not responsible for your use of this tool.
+This tool helps you **write over** redaction boxes in PDFs - like white-out for digital documents.
 
-Republishing altered documents is illegal, and you should not use this to do so.
+- **Detect** black redaction boxes on any PDF page
+- **Replace** boxes of specific dimensions with custom text
+- **Process** entire documents or specific pages
 
-By using this tool you claim all legal liability for any documents you create with it.
+> **Note**: This tool does NOT "recover" redacted data. It simply replaces black boxes with white boxes containing your text.
 
-KNOWN ISSUE:  
-- This converts to PNG then back to PDF, causing the document to expand exponentially each time you change a box.  
-- Consequent to that, the font size remains the same so your box text gets smaller and smaller.
+## Installation
 
-The executable form was compiled with Nuitka, you may need to install [Python](https://www.python.org/) if you do not have it.
+### Option 1: Remote Server (Easiest)
 
-<img width="976" height="808" alt="image" src="https://github.com/user-attachments/assets/b7628f39-7115-4b4f-bd9c-f2977650501e" />
-<img width="1382" height="804" alt="image" src="https://github.com/user-attachments/assets/5bd69540-6d14-4916-a9fc-fbbbebe08891" />
+Add to your Claude Desktop or Claude Code config:
+
+```json
+{
+  "mcpServers": {
+    "unredactor": {
+      "url": "https://unredactor-mcp.up.railway.app/mcp"
+    }
+  }
+}
+```
+
+### Option 2: Install via pip
+
+```bash
+pip install unredactor-mcp
+```
+
+Then add to your config:
+
+```json
+{
+  "mcpServers": {
+    "unredactor": {
+      "command": "unredactor-mcp"
+    }
+  }
+}
+```
+
+### Option 3: Docker
+
+```bash
+docker pull jjohnson/unredactor-mcp
+```
+
+```json
+{
+  "mcpServers": {
+    "unredactor": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "jjohnson/unredactor-mcp"]
+    }
+  }
+}
+```
+
+### Option 4: From Source
+
+```bash
+git clone https://github.com/Justinandjohnson/unredactor-mcp
+cd unredactor-mcp
+pip install -e .
+```
+
+## Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `upload_pdf` | Upload a PDF (base64-encoded) for processing |
+| `get_pdf_info` | Get page count and dimensions |
+| `detect_black_boxes` | Find redaction boxes on a specific page |
+| `detect_all_pages` | Scan entire PDF for boxes |
+| `replace_redaction_boxes` | Replace boxes of a specific size with text |
+| `download_pdf` | Get the modified PDF (base64-encoded) |
+| `cleanup_file` | Delete temporary files |
+
+## Usage Example
+
+Once configured, you can ask Claude:
+
+1. "Upload this PDF and scan it for redaction boxes"
+2. "Replace all the 100x20 boxes on page 1 with 'CLASSIFIED'"
+3. "Download the modified PDF"
+
+## GUI Application
+
+A standalone GUI application is also available for manual editing:
+
+```bash
+pip install PyMuPDF pillow opencv-python
+python unredact.py
+```
+
+<img width="976" alt="GUI Screenshot" src="https://github.com/user-attachments/assets/b7628f39-7115-4b4f-bd9c-f2977650501e" />
+
+## Legal Disclaimer
+
+- This tool is for forensics and legitimate document editing purposes only
+- It does NOT recover truly destroyed/redacted data
+- **Republishing altered documents may be illegal**
+- By using this tool, you assume all legal liability
+
+## Known Limitations
+
+- Converts PDF pages to PNG and back, which can increase file size
+- Font size remains constant, so text may appear smaller after multiple edits
+- Best results with clear, rectangular black boxes
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
