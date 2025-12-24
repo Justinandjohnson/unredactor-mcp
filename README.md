@@ -17,21 +17,7 @@ This tool helps you **write over** redaction boxes in PDFs - like white-out for 
 
 ## Installation
 
-### Option 1: Remote Server (Easiest)
-
-Add to your Claude Desktop or Claude Code config:
-
-```json
-{
-  "mcpServers": {
-    "unredactor": {
-      "url": "https://unredactor-mcp.up.railway.app/mcp"
-    }
-  }
-}
-```
-
-### Option 2: Install via pip
+### Option 1: Install via pip (Recommended)
 
 ```bash
 pip install unredactor-mcp
@@ -49,10 +35,10 @@ Then add to your config:
 }
 ```
 
-### Option 3: Docker
+### Option 2: Docker
 
 ```bash
-docker pull jjohnson/unredactor-mcp
+docker pull justinandjohnson/unredactor-mcp
 ```
 
 ```json
@@ -60,13 +46,13 @@ docker pull jjohnson/unredactor-mcp
   "mcpServers": {
     "unredactor": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "jjohnson/unredactor-mcp"]
+      "args": ["run", "-i", "--rm", "justinandjohnson/unredactor-mcp"]
     }
   }
 }
 ```
 
-### Option 4: From Source
+### Option 3: From Source
 
 ```bash
 git clone https://github.com/Justinandjohnson/unredactor-mcp
