@@ -22,13 +22,9 @@ RUN pip install --no-cache-dir -r requirements-mcp.txt
 # Copy application code
 COPY unredactor_mcp/ ./unredactor_mcp/
 
-# Railway detects port from EXPOSE
-EXPOSE 8080
-
 # Set environment variables
-# Railway injects PORT but we set a default fallback
-ENV PORT=8080
 ENV PYTHONUNBUFFERED=1
 
 # Run the server using uvicorn directly
-CMD ["sh", "-c", "uvicorn unredactor_mcp.server:app --host 0.0.0.0 --port ${PORT:-8080}"]
+# Railway will inject PORT environment variable
+CMD ["sh", "-c", "echo Starting on port $PORT && uvicorn unredactor_mcp.server:app --host 0.0.0.0 --port $PORT"]
