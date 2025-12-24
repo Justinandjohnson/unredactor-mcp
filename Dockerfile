@@ -23,10 +23,10 @@ RUN pip install --no-cache-dir -r requirements-mcp.txt
 COPY unredactor_mcp/ ./unredactor_mcp/
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8080
 
 # Set environment variables
-ENV PORT=8000
+ENV PORT=8080
 ENV PYTHONUNBUFFERED=1
 
 # Run the server
