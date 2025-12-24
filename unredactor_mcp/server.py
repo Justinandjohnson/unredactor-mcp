@@ -16,7 +16,7 @@ import os
 import uuid
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 # Create the MCP server with HTTP transport
 mcp = FastMCP(
@@ -489,7 +489,7 @@ def cleanup_file(file_id: str) -> dict:
 
 def main():
     """Entry point for the MCP server."""
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+    mcp.run(transport="http", host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
 
 
 # Run the server
