@@ -22,11 +22,8 @@ RUN pip install --no-cache-dir -r requirements-mcp.txt
 # Copy application code
 COPY unredactor_mcp/ ./unredactor_mcp/
 
-# Expose port
-EXPOSE 8080
-
 # Set environment variables
-ENV PORT=8080
+# Note: Railway injects its own PORT variable - don't hardcode it
 ENV PYTHONUNBUFFERED=1
 
 # Run the server
