@@ -507,11 +507,16 @@ def cleanup_file(file_id: str) -> dict:
     }
 
 
+# Create ASGI app for production deployment
+app = mcp.http_app(path="/mcp")
+
+
 def main():
     """Entry point for the MCP server."""
+    import uvicorn
     port = int(os.environ.get("PORT", 8080))
     print(f"Starting Unredactor MCP server on port {port}...")
-    mcp.run(transport="http", host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 
 # Run the server

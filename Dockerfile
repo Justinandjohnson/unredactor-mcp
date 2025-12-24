@@ -30,5 +30,5 @@ EXPOSE 8080
 ENV PORT=8080
 ENV PYTHONUNBUFFERED=1
 
-# Run the server
-CMD ["python", "-m", "unredactor_mcp.server"]
+# Run the server using uvicorn directly
+CMD ["sh", "-c", "uvicorn unredactor_mcp.server:app --host 0.0.0.0 --port ${PORT:-8080}"]
