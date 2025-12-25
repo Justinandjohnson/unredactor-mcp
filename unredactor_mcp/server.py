@@ -346,16 +346,48 @@ def upload_pdf(pdf_base64: str, filename: str = "document.pdf") -> dict:
     The PDF content should be base64-encoded. Returns a file_id that you'll
     use with other tools.
 
+    IMPORTANT: For large PDFs (>10MB), consider:
+    - Splitting into smaller files (5-10 pages each)
+    - Using the HTTP API endpoint /api/call-tool instead
+    - Ensuring base64 is complete with no truncation
+
     Args:
-        pdf_base64: Base64-encoded PDF file content
+        pdf_base64: Base64-encoded PDF file content (must be complete, no truncation)
         filename: Optional filename for reference
 
     Returns:
         Dictionary with file_id to use in subsequent operations
     """
+    # Check for common issues
+    if pdf_base64.startswith("{{FILE_BASE64:") or "{{" in pdf_base64:
+        raise ValueError(
+            "Received a placeholder instead of actual base64 data. "
+            "Please encode the PDF file to base64 first. "
+            "For large files, consider using the HTTP API endpoint directly."
+        )
+
+    if len(pdf_base64) < 100:
+        raise ValueError(
+            f"Base64 string too short ({len(pdf_base64)} chars). "
+            "Please provide the complete base64-encoded PDF content."
+        )
+
+    # Warn about large files
+    estimated_size_mb = len(pdf_base64) * 0.75 / (1024 * 1024)  # base64 is ~133% of original
+    if estimated_size_mb > 10:
+        # Still allow it, but warn
+        print(f"Warning: Large PDF ({estimated_size_mb:.1f} MB). This may cause issues.")
+
     try:
         pdf_bytes = base64.b64decode(pdf_base64)
     except Exception as e:
+        error_msg = str(e)
+        if "Incorrect padding" in error_msg:
+            raise ValueError(
+                f"Invalid base64 content: {error_msg}. "
+                "The base64 string appears to be truncated or incomplete. "
+                "Ensure you're sending the COMPLETE base64-encoded file with no truncation."
+            )
         raise ValueError(f"Invalid base64 content: {e}")
 
     # Validate it's a PDF
@@ -442,6 +474,52 @@ def analyze_pdf_type(file_id: str, sample_pages: int = 3) -> dict:
 
     pdf_path = uploaded_files[file_id]
     return is_pdf_text_based(pdf_path, sample_pages)
+
+
+@mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False})
+def detect_boxes_direct(pdf_base64: str, page_number: int = 0) -> dict:
+    """
+    Detect black boxes directly from base64 PDF data without upload.
+
+    This is useful for quick analysis or when upload_pdf fails with large files.
+    Processes the PDF in memory without saving to disk.
+
+    Args:
+        pdf_base64: Base64-encoded PDF file content
+        page_number: Page number to analyze (0-indexed, default 0)
+
+    Returns:
+        Dictionary with detected boxes and analysis
+    """
+    import tempfile
+
+    # Decode PDF
+    try:
+        pdf_bytes = base64.b64decode(pdf_base64)
+    except Exception as e:
+        raise ValueError(f"Invalid base64 content: {e}")
+
+    if not pdf_bytes.startswith(b'%PDF'):
+        raise ValueError("Invalid PDF file")
+
+    # Save to temp file for processing
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+        tmp.write(pdf_bytes)
+        tmp_path = tmp.name
+
+    try:
+        boxes = find_boxes_in_pdf(tmp_path, page_number)
+        pdf_analysis = is_pdf_text_based(tmp_path, sample_pages=1)
+
+        return {
+            "page_number": page_number,
+            "total_boxes_found": len(boxes),
+            "boxes": boxes,
+            "pdf_type": pdf_analysis["recommendation"],
+            "message": f"Found {len(boxes)} boxes on page {page_number}"
+        }
+    finally:
+        os.unlink(tmp_path)
 
 
 @mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False})
